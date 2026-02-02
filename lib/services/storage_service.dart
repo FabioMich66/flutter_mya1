@@ -24,21 +24,42 @@ class StorageService {
 
   Future<void> saveConfig(ConfigModel config) async {
     final prefs = await SharedPreferences.getInstance();
+
     final json = jsonEncode(config.toJson());
-    final encrypted = _encrypter.encrypt(json, iv: enc.IV.fromLength(16)).base64;
+    final encrypted = _encrypter.encrypt(
+      json,
+      iv: enc.IV.fromLength(16),
+    ).base64;
+
     await prefs.setString(_configKey, encrypted);
+
+    // 🔍 DEBUG (se vuoi)
+    // print("SAVE CONFIG JSON: $json");
+    // print("SAVE CONFIG ENCRYPTED: $encrypted");
   }
 
   Future<ConfigModel?> loadConfig() async {
     final prefs = await SharedPreferences.getInstance();
     final encrypted = prefs.getString(_configKey);
-    if (encrypted == null) return null;
+
+    if (encrypted == null) {
+      // print("LOAD CONFIG: nessuna config salvata");
+      return null;
+    }
 
     try {
-      final decrypted =
-          _encrypter.decrypt(enc.Encrypted.fromBase64(encrypted), iv: enc.IV.fromLength(16));
+      final decrypted = _encrypter.decrypt(
+        enc.Encrypted.fromBase64(encrypted),
+        iv: enc.IV.fromLength(16),
+      );
+
+      // 🔍 DEBUG (se vuoi)
+      // print("LOAD CONFIG ENCRYPTED: $encrypted");
+      // print("LOAD CONFIG DECRYPTED: $decrypted");
+
       return ConfigModel.fromJson(jsonDecode(decrypted));
-    } catch (_) {
+    } catch (e) {
+      // print("ERRORE loadConfig(): $e");
       return null;
     }
   }
@@ -49,22 +70,36 @@ class StorageService {
 
   Future<void> saveApps(List<AppModel> apps) async {
     final prefs = await SharedPreferences.getInstance();
+
     final json = jsonEncode(apps.map((a) => a.toJson()).toList());
-    final encrypted = _encrypter.encrypt(json, iv: enc.IV.fromLength(16)).base64;
+    final encrypted = _encrypter.encrypt(
+      json,
+      iv: enc.IV.fromLength(16),
+    ).base64;
+
     await prefs.setString(_appsKey, encrypted);
+
+    // 🔍 DEBUG
+    // print("SAVE APPS JSON: $json");
   }
 
   Future<List<AppModel>?> loadApps() async {
     final prefs = await SharedPreferences.getInstance();
     final encrypted = prefs.getString(_appsKey);
+
     if (encrypted == null) return null;
 
     try {
-      final decrypted =
-          _encrypter.decrypt(enc.Encrypted.fromBase64(encrypted), iv: enc.IV.fromLength(16));
+      final decrypted = _encrypter.decrypt(
+        enc.Encrypted.fromBase64(encrypted),
+        iv: enc.IV.fromLength(16),
+      );
+
       final list = jsonDecode(decrypted) as List;
+
       return list.map((e) => AppModel.fromJson(e)).toList();
-    } catch (_) {
+    } catch (e) {
+      // print("ERRORE loadApps(): $e");
       return null;
     }
   }
@@ -81,11 +116,12 @@ class StorageService {
   Future<List<String>?> loadOrder() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_orderKey);
+
     if (raw == null) return null;
 
     try {
       return List<String>.from(jsonDecode(raw));
-    } catch (_) {
+    } catch (e) {
       return null;
     }
   }
@@ -116,4 +152,3 @@ class StorageService {
     await prefs.remove(_zoomKey);
   }
 }
-
