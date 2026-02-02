@@ -37,6 +37,9 @@ class ConfigController extends AsyncNotifier<ConfigModel?> {
     // 3. Salva config completa
     await storage.saveConfig(updatedConfig);
 
+    // 🔥 FIX: ricostruisci il provider 
+    ref.invalidateSelf();
+
     // 4. Scarica le app
     final apps = await api.fetchApps(updatedConfig, token);
 
