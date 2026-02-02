@@ -59,6 +59,7 @@ class _SetupPageState extends ConsumerState<SetupPage> {
             if (!isLoading)
               ElevatedButton(
                 onPressed: () async {
+                  // VALIDAZIONE
                   if (uriCtrl.text.trim().isEmpty ||
                       userCtrl.text.trim().isEmpty ||
                       passCtrl.text.trim().isEmpty) {
@@ -70,6 +71,7 @@ class _SetupPageState extends ConsumerState<SetupPage> {
                     return;
                   }
 
+                  // CREA MODELLO CONFIG
                   final cfg = ConfigModel(
                     uri: uriCtrl.text.trim(),
                     user: userCtrl.text.trim(),
