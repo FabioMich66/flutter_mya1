@@ -27,8 +27,9 @@ class _SetupPageState extends ConsumerState<SetupPage> {
   @override
   Widget build(BuildContext context) {
     final configState = ref.watch(configProvider);
-
     final isLoading = configState.isLoading;
+
+    print("🔵 [SetupPage] build() → isLoading: $isLoading");
 
     return Scaffold(
       appBar: AppBar(title: const Text('Configurazione')),
@@ -52,16 +53,18 @@ class _SetupPageState extends ConsumerState<SetupPage> {
 
             const SizedBox(height: 20),
 
-            // LOADING INDICATOR
             if (isLoading)
               const CircularProgressIndicator(),
 
             if (!isLoading)
               ElevatedButton(
                 onPressed: () async {
+                  print("🟡 [SetupPage] Bottone SALVA premuto");
+
                   if (uriCtrl.text.trim().isEmpty ||
                       userCtrl.text.trim().isEmpty ||
                       passCtrl.text.trim().isEmpty) {
+                    print("🔴 [SetupPage] Campi vuoti → blocco salvataggio");
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text("Compila tutti i campi"),
@@ -76,13 +79,23 @@ class _SetupPageState extends ConsumerState<SetupPage> {
                     password: passCtrl.text.trim(),
                   );
 
+                  print("🟡 [SetupPage] Config inserita: ${cfg.toJson()}");
+                  print("🟡 [SetupPage] Chiamo saveAndLogin()...");
+
                   final ok = await ref
                       .read(configProvider.notifier)
                       .saveAndLogin(cfg);
 
-                  if (!mounted) return;
+                  print("🟢 [SetupPage] saveAndLogin() ha restituito: $ok");
+
+                  if (!mounted) {
+                    print("🔴 [SetupPage] Widget non più montato → stop");
+                    return;
+                  }
 
                   if (ok) {
+                    print("🟢 [SetupPage] Login OK → navigo a LauncherPage");
+
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
@@ -90,6 +103,8 @@ class _SetupPageState extends ConsumerState<SetupPage> {
                       ),
                     );
                   } else {
+                    print("🔴 [SetupPage] Login FALLITO → mostro snackbar");
+
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text("Errore di login o configurazione"),
@@ -105,4 +120,3 @@ class _SetupPageState extends ConsumerState<SetupPage> {
     );
   }
 }
-
