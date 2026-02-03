@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../controllers/zoom_controller.dart';
 import '../controllers/drag_controller.dart';
 import '../controllers/edit_controller.dart';
+
 import '../models/app_model.dart';
 import 'app_icon.dart';
 
 class AppGrid extends ConsumerWidget {
   final List<AppModel> apps;
   final List<String> order;
+  final bool wiggleMode;
 
-  const AppGrid({super.key, required this.apps, required this.order});
+  const AppGrid({
+    super.key,
+    required this.apps,
+    required this.order,
+    required this.wiggleMode,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,12 +42,10 @@ class AppGrid extends ConsumerWidget {
       ),
       itemCount: order.length,
       itemBuilder: (_, i) {
-        // sicurezza: se l’indice è fuori range
         if (i >= order.length) return const SizedBox();
 
         final id = order[i];
 
-        // sicurezza: se l’app non esiste più
         final app = apps.firstWhere(
           (a) => a.id == id,
           orElse: () => AppModel(
@@ -50,8 +56,7 @@ class AppGrid extends ConsumerWidget {
           ),
         );
 
-        final isPlaceholder =
-            editMode &&
+        final isPlaceholder = editMode &&
             drag.draggingId != null &&
             drag.overIndex == i &&
             drag.overIndex! < order.length;
@@ -60,7 +65,13 @@ class AppGrid extends ConsumerWidget {
           return _PlaceholderIcon(zoom: zoom);
         }
 
-        return AppIcon(app: app, index: i, zoom: zoom);
+        // 🔵 NIENTE GestureDetector QUI
+        return AppIcon(
+          app: app,
+          index: i,
+          zoom: zoom,
+          wiggleMode: wiggleMode,
+        );
       },
     );
   }
@@ -80,4 +91,3 @@ class _PlaceholderIcon extends StatelessWidget {
     );
   }
 }
-

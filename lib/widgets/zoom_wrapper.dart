@@ -23,17 +23,17 @@ class _ZoomWrapperState extends ConsumerState<ZoomWrapper> {
 
     return Listener(
       onPointerSignal: (signal) {
-        if (!editMode) return;
+        if (!editMode) return; // zoom solo in edit mode
         if (signal is PointerScrollEvent) {
           final current = ref.read(zoomProvider);
           final direction = signal.scrollDelta.dy < 0 ? 1 : -1;
-          final factor = 1 + direction * 0.08; // più morbido
+          final factor = 1 + direction * 0.08;
           final newZoom = zoomCtrl.applyElastic(current * factor);
           zoomCtrl.applyZoom(newZoom);
         }
       },
       child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
+        behavior: HitTestBehavior.deferToChild, // 🔵 NON blocca gli eventi
 
         onScaleStart: editMode
             ? (details) {
@@ -43,7 +43,6 @@ class _ZoomWrapperState extends ConsumerState<ZoomWrapper> {
 
         onScaleUpdate: editMode
             ? (details) {
-                // scale relativo → convertito in assoluto
                 final newZoom = zoomCtrl.applyElastic(
                   gestureStartZoom * details.scale,
                 );
@@ -56,4 +55,3 @@ class _ZoomWrapperState extends ConsumerState<ZoomWrapper> {
     );
   }
 }
-

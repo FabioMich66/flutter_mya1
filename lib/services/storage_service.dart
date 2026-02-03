@@ -1,82 +1,88 @@
 import 'dart:convert';
+import 'package:encrypt/encrypt.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:encrypt/encrypt.dart' as enc;
 
-import '../models/app_model.dart';
 import '../models/config_model.dart';
+import '../models/app_model.dart';
 
 class StorageService {
-  // 🔐 Chiave AES-256 ESATTAMENTE di 32 caratteri
-  static const _secretKey = 'my-super-secret-key-32bytes!!';
+  StorageService._(this._prefs);
 
-  static const _configKey = 'launcherConfig';
-  static const _appsKey = 'jsonApps';
-  static const _orderKey = 'appsOrder';
-  static const _zoomKey = 'zoomLevel';
+  final SharedPreferences _prefs;
 
-  enc.Encrypter get _encrypter {
-    // 🔐 Usa la chiave così com’è (32 byte esatti)
-    final key = enc.Key.fromUtf8(_secretKey);
+  // Chiavi per SharedPreferences
+  static const String _configCipherKey = 'config_encrypted';
+  static const String _configIvKey = 'config_iv';
 
-    // 🔐 IV fisso di 16 byte (tutti zero)
-    final iv = enc.IV.fromLength(16);
+  static const String _appsKey = 'apps_encrypted';
+  static const String _appsIvKey = 'apps_iv';
 
-    return enc.Encrypter(enc.AES(key));
+  static const String _orderKey = 'apps_order';
+  static const String _zoomKey = 'zoom_level';
+
+  // Chiave AES a 32 byte
+  static final Key _aesKey = Key.fromUtf8(
+    '0123456789ABCDEF0123456789ABCDEF',
+  );
+
+  static Future<StorageService> getInstance() async {
+    final prefs = await SharedPreferences.getInstance();
+    return StorageService._(prefs);
   }
+
+  Encrypter get _encrypter => Encrypter(
+        AES(
+          _aesKey,
+          mode: AESMode.cbc,
+          padding: 'PKCS7',
+        ),
+      );
 
   // ------------------------------------------------------------
   // CONFIG
   // ------------------------------------------------------------
 
-  Future<void> saveConfig(ConfigModel config) async {
-    print("🟡 [StorageService.saveConfig] Salvataggio config...");
-
-    final prefs = await SharedPreferences.getInstance();
-
-    final json = jsonEncode(config.toJson());
-    print("🟡 JSON: $json");
-
-    final encrypted = _encrypter.encrypt(
-      json,
-      iv: enc.IV.fromLength(16),
-    ).base64;
-
-    print("🟡 ENCRYPTED: $encrypted");
-
-    await prefs.setString(_configKey, encrypted);
-
-    print("🟢 Config salvata");
-  }
-
   Future<ConfigModel?> loadConfig() async {
     print("🔵 [StorageService.loadConfig] Caricamento config...");
 
-    final prefs = await SharedPreferences.getInstance();
-    final encrypted = prefs.getString(_configKey);
+    final encryptedBase64 = _prefs.getString(_configCipherKey);
+    final ivBase64 = _prefs.getString(_configIvKey);
 
-    print("🔵 ENCRYPTED LETTO: $encrypted");
+    print("🔵 ENCRYPTED LETTO: $encryptedBase64");
+    print("🔵 IV LETTO: $ivBase64");
 
-    if (encrypted == null) {
+    if (encryptedBase64 == null || ivBase64 == null) {
       print("🔴 Nessuna config salvata");
       return null;
     }
 
     try {
-      final decrypted = _encrypter.decrypt(
-        enc.Encrypted.fromBase64(encrypted),
-        iv: enc.IV.fromLength(16),
-      );
+      final iv = IV.fromBase64(ivBase64);
+      final decrypted = _encrypter.decrypt64(encryptedBase64, iv: iv);
 
-      print("🟢 DECRYPTED: $decrypted");
+      final jsonMap = jsonDecode(decrypted);
+      print("🟢 DECRYPTED: $jsonMap");
 
-      final json = jsonDecode(decrypted);
-      print("🟢 JSON PARSED: $json");
-
-      return ConfigModel.fromJson(json);
+      return ConfigModel.fromJson(jsonMap);
     } catch (e) {
       print("🔴 ERRORE decrypt/parse: $e");
       return null;
     }
+  }
+
+  Future<void> saveConfig(ConfigModel config) async {
+    print("🟡 [StorageService.saveConfig] Salvataggio config...");
+
+    final jsonString = jsonEncode(config.toJson());
+    print("🟡 JSON: $jsonString");
+
+    final iv = IV.fromSecureRandom(16);
+    final encrypted = _encrypter.encrypt(jsonString, iv: iv);
+
+    await _prefs.setString(_configCipherKey, encrypted.base64);
+    await _prefs.setString(_configIvKey, iv.base64);
+
+    print("🟢 Config salvata");
   }
 
   // ------------------------------------------------------------
@@ -86,19 +92,13 @@ class StorageService {
   Future<void> saveApps(List<AppModel> apps) async {
     print("🟡 [StorageService.saveApps] Salvataggio apps...");
 
-    final prefs = await SharedPreferences.getInstance();
+    final jsonString = jsonEncode(apps.map((a) => a.toJson()).toList());
 
-    final json = jsonEncode(apps.map((a) => a.toJson()).toList());
-    print("🟡 JSON: $json");
+    final iv = IV.fromSecureRandom(16);
+    final encrypted = _encrypter.encrypt(jsonString, iv: iv);
 
-    final encrypted = _encrypter.encrypt(
-      json,
-      iv: enc.IV.fromLength(16),
-    ).base64;
-
-    print("🟡 ENCRYPTED: $encrypted");
-
-    await prefs.setString(_appsKey, encrypted);
+    await _prefs.setString(_appsKey, encrypted.base64);
+    await _prefs.setString(_appsIvKey, iv.base64);
 
     print("🟢 Apps salvate");
   }
@@ -106,27 +106,19 @@ class StorageService {
   Future<List<AppModel>?> loadApps() async {
     print("🔵 [StorageService.loadApps] Caricamento apps...");
 
-    final prefs = await SharedPreferences.getInstance();
-    final encrypted = prefs.getString(_appsKey);
+    final encryptedBase64 = _prefs.getString(_appsKey);
+    final ivBase64 = _prefs.getString(_appsIvKey);
 
-    print("🔵 ENCRYPTED LETTO: $encrypted");
-
-    if (encrypted == null) return null;
+    if (encryptedBase64 == null || ivBase64 == null) return null;
 
     try {
-      final decrypted = _encrypter.decrypt(
-        enc.Encrypted.fromBase64(encrypted),
-        iv: enc.IV.fromLength(16),
-      );
-
-      print("🟢 DECRYPTED: $decrypted");
+      final iv = IV.fromBase64(ivBase64);
+      final decrypted = _encrypter.decrypt64(encryptedBase64, iv: iv);
 
       final list = jsonDecode(decrypted) as List;
-      print("🟢 JSON PARSED: $list");
-
       return list.map((e) => AppModel.fromJson(e)).toList();
     } catch (e) {
-      print("🔴 ERRORE decrypt/parse: $e");
+      print("🔴 ERRORE decrypt/parse apps: $e");
       return null;
     }
   }
@@ -136,27 +128,16 @@ class StorageService {
   // ------------------------------------------------------------
 
   Future<void> saveOrder(List<String> order) async {
-    print("🟡 [StorageService.saveOrder] Salvataggio ordine...");
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_orderKey, jsonEncode(order));
-    print("🟢 Ordine salvato");
+    await _prefs.setString(_orderKey, jsonEncode(order));
   }
 
   Future<List<String>?> loadOrder() async {
-    print("🔵 [StorageService.loadOrder] Caricamento ordine...");
-    final prefs = await SharedPreferences.getInstance();
-
-    final raw = prefs.getString(_orderKey);
-    print("🔵 RAW: $raw");
-
+    final raw = _prefs.getString(_orderKey);
     if (raw == null) return null;
 
     try {
-      final list = List<String>.from(jsonDecode(raw));
-      print("🟢 PARSED: $list");
-      return list;
-    } catch (e) {
-      print("🔴 ERRORE parse: $e");
+      return List<String>.from(jsonDecode(raw));
+    } catch (_) {
       return null;
     }
   }
@@ -166,31 +147,23 @@ class StorageService {
   // ------------------------------------------------------------
 
   Future<void> saveZoom(double zoom) async {
-    print("🟡 [StorageService.saveZoom] Salvataggio zoom: $zoom");
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_zoomKey, zoom);
-    print("🟢 Zoom salvato");
+    await _prefs.setDouble(_zoomKey, zoom);
   }
 
   Future<double?> loadZoom() async {
-    print("🔵 [StorageService.loadZoom] Caricamento zoom...");
-    final prefs = await SharedPreferences.getInstance();
-    final zoom = prefs.getDouble(_zoomKey);
-    print("🟢 Zoom letto: $zoom");
-    return zoom;
+    return _prefs.getDouble(_zoomKey);
   }
 
   // ------------------------------------------------------------
-  // RESET TOTALE
+  // RESET
   // ------------------------------------------------------------
 
   Future<void> clearAll() async {
-    print("🟡 [StorageService.clearAll] Reset totale...");
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_configKey);
-    await prefs.remove(_appsKey);
-    await prefs.remove(_orderKey);
-    await prefs.remove(_zoomKey);
-    print("🟢 Tutto cancellato");
+    await _prefs.remove(_configCipherKey);
+    await _prefs.remove(_configIvKey);
+    await _prefs.remove(_appsKey);
+    await _prefs.remove(_appsIvKey);
+    await _prefs.remove(_orderKey);
+    await _prefs.remove(_zoomKey);
   }
 }

@@ -6,8 +6,6 @@ final zoomProvider =
     NotifierProvider<ZoomController, double>(() => ZoomController());
 
 class ZoomController extends Notifier<double> {
-  final storage = StorageService();
-
   double minZoom = 0.5;
   double maxZoom = 4.0;
 
@@ -18,18 +16,28 @@ class ZoomController extends Notifier<double> {
   }
 
   Future<void> _load() async {
+    final storage = await StorageService.getInstance();
     final z = await storage.loadZoom();
-    if (z != null) state = z;
+    if (z != null) {
+      state = z;
+      print("🟢 [ZoomController] Zoom caricato: $z");
+    } else {
+      print("🔵 [ZoomController] Nessun zoom salvato, uso default 1.0");
+    }
   }
 
   void updateMaxZoom(double screenWidth) {
     maxZoom = min(screenWidth / 85, 4.0);
   }
 
-  void applyZoom(double z) {
+  Future<void> applyZoom(double z) async {
+    final storage = await StorageService.getInstance();
+
     final clamped = z.clamp(minZoom, maxZoom);
     state = clamped;
-    storage.saveZoom(clamped);
+
+    await storage.saveZoom(clamped);
+    print("🟢 [ZoomController] Zoom salvato: $clamped");
   }
 
   double applyElastic(double z) {

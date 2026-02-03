@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../controllers/config_controller.dart';
 import '../models/config_model.dart';
-import '../services/storage_service.dart';
-import '../utils/alert_service.dart';
 import 'launcher_page.dart';
 
 class SetupPage extends ConsumerStatefulWidget {
@@ -30,6 +28,8 @@ class _SetupPageState extends ConsumerState<SetupPage> {
   Widget build(BuildContext context) {
     final configState = ref.watch(configProvider);
     final isLoading = configState.isLoading;
+
+    print("🔵 [SetupPage] build() → isLoading: $isLoading");
 
     return Scaffold(
       appBar: AppBar(title: const Text('Configurazione')),
@@ -59,10 +59,12 @@ class _SetupPageState extends ConsumerState<SetupPage> {
             if (!isLoading)
               ElevatedButton(
                 onPressed: () async {
-                  // VALIDAZIONE
+                  print("🟡 [SetupPage] Bottone SALVA premuto");
+
                   if (uriCtrl.text.trim().isEmpty ||
                       userCtrl.text.trim().isEmpty ||
                       passCtrl.text.trim().isEmpty) {
+                    print("🔴 [SetupPage] Campi vuoti → blocco salvataggio");
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text("Compila tutti i campi"),
@@ -71,57 +73,44 @@ class _SetupPageState extends ConsumerState<SetupPage> {
                     return;
                   }
 
-                  // CREA MODELLO CONFIG
                   final cfg = ConfigModel(
                     uri: uriCtrl.text.trim(),
                     user: userCtrl.text.trim(),
                     password: passCtrl.text.trim(),
                   );
 
-                  // 1️⃣ Mostra credenziali PRIMA del salvataggio
-                  await AlertService.show(
-                    context,
-                    "Credenziali inserite:\n"
-                    "URL: ${cfg.uri}\n"
-                    "User: ${cfg.user}\n"
-                    "Password: ${cfg.password}",
-                  );
+                  print("🟡 [SetupPage] Config inserita: ${cfg.toJson()}");
+                  print("🟡 [SetupPage] Chiamo saveAndLogin()...");
 
-                  // 2️⃣ Salva + login
                   final ok = await ref
                       .read(configProvider.notifier)
                       .saveAndLogin(cfg);
 
-                  if (!mounted) return;
+                  print("🟢 [SetupPage] saveAndLogin() ha restituito: $ok");
 
-                  if (!ok) {
+                  if (!mounted) {
+                    print("🔴 [SetupPage] Widget non più montato → stop");
+                    return;
+                  }
+
+                  if (ok) {
+                    print("🟢 [SetupPage] Login OK → navigo a LauncherPage");
+
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const LauncherPage(),
+                      ),
+                    );
+                  } else {
+                    print("🔴 [SetupPage] Login FALLITO → mostro snackbar");
+
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text("Errore di login o configurazione"),
                       ),
                     );
-                    return;
                   }
-
-                  // 3️⃣ Ricarica la config salvata
-                  final loaded = await StorageService().loadConfig();
-
-                  // 4️⃣ Mostra cosa è stato realmente salvato
-                  await AlertService.show(
-                    context,
-                    "Config ricaricata da storage:\n"
-                    "URL: ${loaded?.uri}\n"
-                    "User: ${loaded?.user}\n"
-                    "Token: ${loaded?.token}",
-                  );
-
-                  // 5️⃣ Vai alla LauncherPage
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const LauncherPage(),
-                    ),
-                  );
                 },
                 child: const Text('Salva'),
               ),
