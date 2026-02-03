@@ -5,8 +5,8 @@ import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import 'config_controller.dart';
 
-final launcherProvider =
-    NotifierProvider<LauncherController, LauncherState>(() => LauncherController());
+final launcherProvider = NotifierProvider<LauncherController, LauncherState>(
+    () => LauncherController());
 
 class LauncherState {
   final List<AppModel> apps;
@@ -29,7 +29,6 @@ class LauncherState {
 }
 
 class LauncherController extends Notifier<LauncherState> {
-  final storage = StorageService();
   final api = ApiService();
 
   @override
@@ -39,20 +38,28 @@ class LauncherController extends Notifier<LauncherState> {
   }
 
   Future<void> _init() async {
-    final cfg = ref.read(configProvider).value;
-    if (cfg == null) return;
+    print("🔵 [LauncherController] Init...");
 
-    // 1. Carica da storage
+    final cfg = ref.read(configProvider).value;
+    if (cfg == null) {
+      print("🔴 [LauncherController] Config NULL → non carico apps");
+      return;
+    }
+
+    final storage = await StorageService.getInstance();
+
     final savedApps = await storage.loadApps();
     final savedOrder = await storage.loadOrder();
 
-    List<AppModel> apps = savedApps ?? [];
-    List<String> order = savedOrder ?? apps.map((a) => a.id).toList();
+    final apps = savedApps ?? [];
+    final order = savedOrder ?? apps.map((a) => a.id).toList();
+
+    print("🟢 [LauncherController] Apps da storage: ${apps.length}");
 
     state = LauncherState(apps: apps, order: order);
 
-    // 2. Aggiorna dal server se c’è un token
     if (cfg.token != null) {
+      print("🟡 [LauncherController] Aggiorno apps dal server...");
       await refreshFromServer();
     }
   }
@@ -61,35 +68,54 @@ class LauncherController extends Notifier<LauncherState> {
   // MODIFICHE LOCALI
   // ------------------------------------------------------------
 
-  void renameApp(String id, String newName) {
+  Future<void> renameApp(String id, String newName) async {
+    final storage = await StorageService.getInstance();
+
     final apps = state.apps.map((a) {
-      if (a.id == id) return AppModel(id: a.id, name: newName, url: a.url, iconDataUrl: 
-a.iconDataUrl);
+      if (a.id == id) {
+        return AppModel(
+          id: a.id,
+          name: newName,
+          url: a.url,
+          iconDataUrl: a.iconDataUrl,
+        );
+      }
       return a;
     }).toList();
 
-    storage.saveApps(apps);
+    await storage.saveApps(apps);
     state = state.copyWith(apps: apps);
   }
 
-  void changeIcon(String id, List<int> bytes) {
+  Future<void> changeIcon(String id, List<int> bytes) async {
+    final storage = await StorageService.getInstance();
+
     final newIcon = ImageUtils.bytesToDataUrl(bytes);
 
     final apps = state.apps.map((a) {
-      if (a.id == id) return AppModel(id: a.id, name: a.name, url: a.url, iconDataUrl: newIcon);
+      if (a.id == id) {
+        return AppModel(
+          id: a.id,
+          name: a.name,
+          url: a.url,
+          iconDataUrl: newIcon,
+        );
+      }
       return a;
     }).toList();
 
-    storage.saveApps(apps);
+    await storage.saveApps(apps);
     state = state.copyWith(apps: apps);
   }
 
-  void removeApp(String id) {
+  Future<void> removeApp(String id) async {
+    final storage = await StorageService.getInstance();
+
     final apps = state.apps.where((a) => a.id != id).toList();
     final order = state.order.where((o) => o != id).toList();
 
-    storage.saveApps(apps);
-    storage.saveOrder(order);
+    await storage.saveApps(apps);
+    await storage.saveOrder(order);
 
     state = LauncherState(apps: apps, order: order);
   }
@@ -98,12 +124,14 @@ a.iconDataUrl);
   // RIORDINO
   // ------------------------------------------------------------
 
-  void reorder(int oldIndex, int newIndex) {
+  Future<void> reorder(int oldIndex, int newIndex) async {
+    final storage = await StorageService.getInstance();
+
     final newOrder = [...state.order];
     final id = newOrder.removeAt(oldIndex);
     newOrder.insert(newIndex, id);
 
-    storage.saveOrder(newOrder);
+    await storage.saveOrder(newOrder);
     state = state.copyWith(order: newOrder);
   }
 
@@ -115,8 +143,9 @@ a.iconDataUrl);
     final cfg = ref.read(configProvider).value;
     if (cfg == null || cfg.token == null) return;
 
-    final apps = await api.fetchApps(cfg, cfg.token!);
+    final storage = await StorageService.getInstance();
 
+    final apps = await api.fetchApps(cfg, cfg.token!);
     await storage.saveApps(apps);
 
     final order = apps.map((a) => a.id).toList();
@@ -125,6 +154,3 @@ a.iconDataUrl);
     state = LauncherState(apps: apps, order: order);
   }
 }
-
-
-
